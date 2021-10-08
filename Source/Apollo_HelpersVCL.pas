@@ -4,7 +4,9 @@ interface
 
 uses
   System.Classes,
+  System.Types,
   Vcl.Controls,
+  Vcl.ExtCtrls,
   Vcl.Forms,
   Vcl.Graphics,
   Vcl.Grids,
@@ -22,12 +24,28 @@ type
     procedure SetReadOnly(const aControls: TArray<TWinControl>; const aReadOnly: Boolean = True);
   end;
 
+  TFormHelper = class helper for TForm
+    procedure ShowFrame(aParent: TPanel; aFrame: TFrame);
+  end;
+
   TStringGridHelper = class helper for TStringGrid
   private
+    function GetTextRect(const aText: string): TRect;
+    procedure DoTextOut(const aRow: Integer; const aCellRect, aTextRect: TRect; const aText: string);
     procedure HideCellComboBox(Sender: TObject);
   public
+    /// call in OnDrawCell event only
+    function AlignTextCenter(const aCol, aRow: Integer): TRect;
     function GetColWidths: TArray<Integer>;
     function GetGridState : TGridState;
+    function IsFixedRow(const aRow: Integer): Boolean;
+    /// call in OnDrawCell event only
+    procedure AlignTextHorizontal(const aCol, aRow: Integer);
+     /// call in OnDrawCell event only
+    procedure AlignTextVertical(const aCol, aRow: Integer);
+    procedure DeleteRow(const aRow: Integer);
+    procedure InsertFirstRow;
+    procedure InsertRow(const aBeforeRow: Integer);
     /// recommend to call in StringGrid`s SelectCell and SetEditText event
     procedure SetCellAsComboBox(const aCol, aRow: Integer; aComboBox: TComboBox);
     procedure SetHeaders(const aColNames: TArray<string>; const aDefaultColWidths, aStoredColWidths: TArray<Integer>);
@@ -61,25 +79,118 @@ type
   TPictureHelper = class helper for TPicture
   public
     function MakeThumbnail(const aHeight: Integer): TJpegImage;
+    function ResizeByHeight(const aHeight: Integer): TRect;
+    procedure LoadFromResource(aInstance: HInst; const aResourceName: string);
+  end;
+
+  TRectHelper = record helper for TRect
+  public
+    procedure AlignHorizontal(const aMasterRect: TRect);
+    procedure AlignVertical(const aMasterRect: TRect);
+  end;
+
+  TControlsArrayHelper = record helper for TArray<TControl>
+    function Contains(aControl: TControl): Boolean;
   end;
 
   TVCLTools = record
     class procedure OpenURL(const aURL: string); static;
     class procedure ShowDirectory(const aDirPath: string); static;
+    class procedure ShowFrame(aParent: TPanel; aFrame: TFrame); static;
   end;
 
 implementation
 
 uses
+  System.Math,
   System.SysUtils,
-  System.Types,
-  Vcl.ExtCtrls,
   Winapi.ActiveX,
   Winapi.GDIPOBJ,
   Winapi.ShellAPI,
   Winapi.Windows;
 
 { TStringGridHelper }
+
+function TStringGridHelper.AlignTextCenter(const aCol, aRow: Integer): TRect;
+var
+  CellRec: TRect;
+  Text: string;
+begin
+  CellRec := CellRect(aCol, aRow);
+  Text := Cells[aCol, aRow];
+
+  Result := GetTextRect(Text);
+  Result.AlignHorizontal(CellRec);
+  Result.AlignVertical(CellRec);
+
+  DoTextOut(aRow, CellRec, Result, Text);
+end;
+
+procedure TStringGridHelper.AlignTextHorizontal(const aCol, aRow: Integer);
+var
+  CellRec: TRect;
+  Text: string;
+  TextRect: TRect;
+begin
+  CellRec := CellRect(aCol, aRow);
+  Text := Cells[aCol, aRow];
+
+  TextRect := GetTextRect(Text);
+  TextRect.AlignHorizontal(CellRec);
+
+  DoTextOut(aRow, CellRec, TextRect, Text);
+end;
+
+procedure TStringGridHelper.AlignTextVertical(const aCol, aRow: Integer);
+var
+  CellRec: TRect;
+  Text: string;
+  TextRect: TRect;
+begin
+  CellRec := CellRect(aCol, aRow);
+  Text := Cells[aCol, aRow];
+
+  TextRect := GetTextRect(Text);
+  TextRect.AlignVertical(CellRec);
+
+  DoTextOut(aRow, CellRec, TextRect, Text);
+end;
+
+procedure TStringGridHelper.DeleteRow(const aRow: Integer);
+var
+  Col: Integer;
+  Row: Integer;
+begin
+  if (aRow = FixedRows) and (RowCount = FixedRows + 1) then
+    for Col := 0 to ColCount - 1 do
+    begin
+      Cells[Col, aRow] := '';
+      Objects[Col, aRow] := nil;
+    end
+  else
+  begin
+    for Row := aRow + 1 to RowCount - 1 do
+      for Col := 0 to ColCount - 1 do
+      begin
+        Cells[Col, Row - 1] := Cells[Col, Row];
+        Objects[Col, Row - 1] := Objects[Col, Row];
+      end;
+
+    RowCount := RowCount - 1;
+  end;
+end;
+
+procedure TStringGridHelper.DoTextOut(const aRow: Integer; const aCellRect, aTextRect: TRect;
+  const aText: string);
+begin
+  if aRow < FixedRows then
+    Canvas.Brush.Color := FixedColor
+  else
+    Canvas.Brush.Color := Color;
+
+  Canvas.FillRect(aCellRect);
+  Canvas.TextOut(aTextRect.Left, aTextRect.Top, aText);
+end;
 
 function TStringGridHelper.GetColWidths: TArray<Integer>;
 var
@@ -91,9 +202,22 @@ begin
     Result := Result + [ColWidths[i]];
 end;
 
+function TStringGridHelper.IsFixedRow(const aRow: Integer): Boolean;
+begin
+  Result := aRow < FixedRows;
+end;
+
 function TStringGridHelper.GetGridState: TGridState;
 begin
   Result := FGridState;
+end;
+
+function TStringGridHelper.GetTextRect(const aText: string): TRect;
+begin
+  Result.Top := 0;
+  Result.Left := 0;
+  Result.Height := Canvas.TextHeight(aText);
+  Result.Width := Canvas.TextWidth(aText);
 end;
 
 procedure TStringGridHelper.HideCellComboBox(Sender: TObject);
@@ -105,6 +229,36 @@ begin
   Cells[Col, Row] := ComboBox.Items[ComboBox.ItemIndex];
   ComboBox.Visible := False;
   SetFocus;
+end;
+
+procedure TStringGridHelper.InsertFirstRow;
+begin
+  if RowCount > FixedRows + 1 then
+    InsertRow(0);
+end;
+
+procedure TStringGridHelper.InsertRow(const aBeforeRow: Integer);
+var
+  Col: Integer;
+  FirstRow: Integer;
+  Row: Integer;
+begin
+  RowCount := RowCount + 1;
+
+  FirstRow := Max(FixedRows, aBeforeRow);
+
+  for Row := RowCount - 2 downto FirstRow do
+    for Col := 0 to ColCount - 1 do
+    begin
+      Cells[Col, Row + 1] := Cells[Col, Row];
+      Objects[Col, Row + 1] := Objects[Col, Row];
+    end;
+
+  for Col := 0 to ColCount - 1 do
+  begin
+    Cells[Col, FirstRow] := '';
+    Objects[Col, FirstRow] := nil;
+  end;
 end;
 
 procedure TStringGridHelper.SetCellAsComboBox(const aCol, aRow: Integer;
@@ -307,6 +461,18 @@ end;
 
 { TPictureHelper }
 
+procedure TPictureHelper.LoadFromResource(aInstance: HInst; const aResourceName: string);
+var
+  ResStream: TResourceStream;
+begin
+  ResStream := TResourceStream.Create(aInstance, aResourceName, RT_RCDATA);
+  try
+    LoadFromStream(ResStream);
+  finally
+    ResStream.Free;
+  end;
+end;
+
 function TPictureHelper.MakeThumbnail(const aHeight: Integer): TJpegImage;
 var
   GDIPlus: TGPGraphics;
@@ -345,6 +511,18 @@ begin
   end;
 end;
 
+function TPictureHelper.ResizeByHeight(const aHeight: Integer): TRect;
+var
+  Ratio: Extended;
+begin
+  Result.Top := 0;
+  Result.Left := 0;
+  Result.Height := aHeight;
+
+  Ratio := aHeight / Height;
+  Result.Width := Trunc(Width * Ratio);
+end;
+
 { TVCLTools }
 
 class procedure TVCLTools.ShowDirectory(const aDirPath: string);
@@ -367,6 +545,76 @@ begin
     nil,
     SW_SHOWNORMAL
   );
+end;
+
+class procedure TVCLTools.ShowFrame(aParent: TPanel; aFrame: TFrame);
+var
+  Frame: TFrame;
+  i: Integer;
+begin
+  for i := 0 to aParent.ControlCount - 1 do
+    if aParent.Controls[i].InheritsFrom(TFrame) then
+    begin
+      Frame := TFrame(aParent.Controls[i]);
+      if Frame <> aFrame then
+        Frame.Visible := False;
+    end;
+
+  aFrame.Parent := aParent;
+  aFrame.Align := alClient;
+  aFrame.Visible := True;
+end;
+
+{TRectHelper}
+
+procedure TRectHelper.AlignHorizontal(const aMasterRect: TRect);
+var
+  AlignedLeft: Integer;
+  NewTop: Integer;
+begin
+  AlignedLeft := (aMasterRect.Width - Width) div 2;
+
+  if aMasterRect.Contains(TPoint.Create(AlignedLeft, Top)) then
+    NewTop := Top
+  else
+    NewTop := aMasterRect.Top;
+
+  SetLocation(aMasterRect.Left + AlignedLeft, NewTop);
+end;
+
+procedure TRectHelper.AlignVertical(const aMasterRect: TRect);
+var
+  AlignedTop: Integer;
+  NewLeft: Integer;
+begin
+  AlignedTop := (aMasterRect.Height - Height) div 2;
+
+  if aMasterRect.Contains(TPoint.Create(Left, AlignedTop)) then
+    NewLeft := Left
+  else
+    NewLeft := aMasterRect.Left;
+
+  SetLocation(NewLeft, aMasterRect.Top + AlignedTop);
+end;
+
+{ TFormHelper }
+
+procedure TFormHelper.ShowFrame(aParent: TPanel; aFrame: TFrame);
+begin
+  TVCLTools.ShowFrame(aParent, aFrame);
+end;
+
+{TControlsArrayHelper}
+
+function TControlsArrayHelper.Contains(aControl: TControl): Boolean;
+var
+  Control: TControl;
+begin
+  Result := False;
+
+  for Control in Self do
+    if Control = aControl then
+      Exit(True);
 end;
 
 end.
