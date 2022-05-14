@@ -88,12 +88,6 @@ type
     procedure LoadFromResource(aInstance: HInst; const aResourceName: string);
   end;
 
-  TRectHelper = record helper for TRect
-  public
-    procedure AlignHorizontal(const aMasterRect: TRect);
-    procedure AlignVertical(const aMasterRect: TRect);
-  end;
-
   TControlsArrayHelper = record helper for TArray<TControl>
     function Contains(aControl: TControl): Boolean;
   end;
@@ -599,38 +593,6 @@ begin
   aFrame.FitParentWidth(aFrame.Constraints.MinWidth);
 
   aFrame.Visible := True;
-end;
-
-{TRectHelper}
-
-procedure TRectHelper.AlignHorizontal(const aMasterRect: TRect);
-var
-  AlignedLeft: Integer;
-  NewTop: Integer;
-begin
-  AlignedLeft := aMasterRect.Left + ((aMasterRect.Width - Width) div 2);
-
-  if aMasterRect.Contains(TPoint.Create(AlignedLeft, Top)) then
-    NewTop := Top
-  else
-    NewTop := aMasterRect.Top;
-
-  SetLocation(AlignedLeft, NewTop);
-end;
-
-procedure TRectHelper.AlignVertical(const aMasterRect: TRect);
-var
-  AlignedTop: Integer;
-  NewLeft: Integer;
-begin
-  AlignedTop := aMasterRect.Top + ((aMasterRect.Height - Height) div 2);
-
-  if aMasterRect.Contains(TPoint.Create(Left, AlignedTop)) then
-    NewLeft := Left
-  else
-    NewLeft := aMasterRect.Left;
-
-  SetLocation(NewLeft, AlignedTop);
 end;
 
 { TFormHelper }
