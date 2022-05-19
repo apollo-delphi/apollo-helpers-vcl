@@ -64,6 +64,11 @@ type
     procedure AlignVertical(const aMasterRect: TRect);
   end;
 
+  TCanvasHelper = class helper for TCanvas
+  public
+    function GetTextRect(const aText: string): TRect;
+  end;
+
 implementation
 
 uses
@@ -356,6 +361,16 @@ begin
     NewLeft := aMasterRect.Left;
 
   SetLocation(NewLeft, AlignedTop);
+end;
+
+{ TCanvasHelper }
+
+function TCanvasHelper.GetTextRect(const aText: string): TRect;
+begin
+  Result.Top := 0;
+  Result.Left := 0;
+  Result.Height := TextHeight(aText);
+  Result.Width := TextWidth(aText);
 end;
 
 end.

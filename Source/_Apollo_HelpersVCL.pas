@@ -34,7 +34,6 @@ type
 
   TStringGridHelper = class helper for TStringGrid
   private
-    function GetTextRect(const aText: string): TRect;
     procedure DoTextOut(const aTextRect: TRect; const aText: string);
     procedure HideCellComboBox(Sender: TObject);
   public
@@ -193,14 +192,6 @@ end;
 function TStringGridHelper.GetGridState: TGridState;
 begin
   Result := FGridState;
-end;
-
-function TStringGridHelper.GetTextRect(const aText: string): TRect;
-begin
-  Result.Top := 0;
-  Result.Left := 0;
-  Result.Height := Canvas.TextHeight(aText);
-  Result.Width := Canvas.TextWidth(aText);
 end;
 
 procedure TStringGridHelper.HideCellComboBox(Sender: TObject);
