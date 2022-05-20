@@ -61,6 +61,7 @@ type
 
   TRectHelper = record helper for TRect
   public
+    function FitText(const aText: string; aCanvas: TCanvas): string;
     procedure AlignHorizontal(const aMasterRect: TRect);
     procedure AlignVertical(const aMasterRect: TRect);
   end;
@@ -375,6 +376,28 @@ begin
     NewLeft := aMasterRect.Left;
 
   SetLocation(NewLeft, AlignedTop);
+end;
+
+function TRectHelper.FitText(const aText: string; aCanvas: TCanvas): string;
+var
+  i: Integer;
+  Output: string;
+  OutputTextWidth: Integer;
+begin
+  Result := '';
+  Output := '';
+
+  for i := 0 to aText.Length - 1 do
+  begin
+    Output := Output + aText.Chars[i];
+    OutputTextWidth := aCanvas.TextWidth(Output);
+    if OutputTextWidth > Width then
+    begin
+      Exit(Result);
+    end
+    else
+      Result := Output;
+  end;
 end;
 
 { TCanvasHelper }
