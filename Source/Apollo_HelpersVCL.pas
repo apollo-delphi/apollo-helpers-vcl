@@ -25,6 +25,7 @@ type
 
   TWinControlHelper = class helper for TWinControl
   public
+    function GetParentForm: TForm;
     procedure SetReadOnly(const aControls: TArray<TWinControl>; const aReadOnly: Boolean = True);
   end;
 
@@ -192,6 +193,19 @@ begin
 end;
 
 { TWinControlHelper }
+
+function TWinControlHelper.GetParentForm: TForm;
+begin
+  Result := nil;
+
+  if Assigned(Parent) then
+  begin
+    if Parent.InheritsFrom(TForm) then
+      Exit(TForm(Parent))
+    else
+      Result := Parent.GetParentForm;
+  end;
+end;
 
 procedure TWinControlHelper.SetReadOnly(const aControls: TArray<TWinControl>;
   const aReadOnly: Boolean);

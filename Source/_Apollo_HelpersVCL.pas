@@ -20,7 +20,6 @@ type
 
   TWinControlHelper = class helper for TWinControl
   public
-    function GetParentForm: TForm;
     procedure FitParentHeight(const aHeight: Integer);
     procedure FitParentWidth(const aWidth: Integer);
     procedure SetReadOnly(const aControls: TArray<TWinControl>; const aReadOnly: Boolean = True);
@@ -376,19 +375,6 @@ begin
     Parent.ClientWidth := aWidth;
 
   Parent.FitParentWidth(aWidth);
-end;
-
-function TWinControlHelper.GetParentForm: TForm;
-begin
-  Result := nil;
-
-  if Assigned(Parent) then
-  begin
-    if Parent.InheritsFrom(TForm) then
-      Exit(TForm(Parent))
-    else
-      Result := Parent.GetParentForm;
-  end;
 end;
 
 procedure TWinControlHelper.SetReadOnly(const aControls: TArray<TWinControl>; const aReadOnly: Boolean);
